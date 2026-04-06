@@ -4,10 +4,10 @@
   "description": "NeoForge mod template: Gradle lives in mod/; npm scripts proxy to gradlew.",
   "scripts": {
     "gradle": "node tools/run-gradle.cjs",
-    "build": "node tools/run-gradle.cjs build",
+    "build": "node tools/run-gradle.cjs build && node tools/show-build-output.cjs",
     "clean": "node tools/run-gradle.cjs clean",
     "compile": "node tools/run-gradle.cjs compileJava",
-    "jar": "node tools/run-gradle.cjs jar",
+    "jar": "node tools/run-gradle.cjs jar && node tools/show-build-output.cjs",
     "client": "node tools/run-gradle.cjs runClient",
     "server": "node tools/run-gradle.cjs runServer",
     "data": "node tools/run-gradle.cjs runData",

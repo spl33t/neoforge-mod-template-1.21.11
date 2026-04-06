@@ -41,6 +41,7 @@ function parseArgs(argv) {
     group: null,
     name: null,
     className: 'ModMain',
+    classNameFromCli: false,
     description: undefined,
     license: 'MIT',
     version: '0.0.1',
@@ -70,6 +71,7 @@ function parseArgs(argv) {
       case '--class-name':
       case '-c':
         out.className = next();
+        out.classNameFromCli = true;
         break;
       case '--description':
       case '-d':
@@ -105,22 +107,67 @@ function question(rl, prompt) {
   return new Promise((resolve) => rl.question(prompt, resolve));
 }
 
+async function promptModIdInteractive(rl) {
+  while (true) {
+    const line = await question(rl, `Mod id [${TEMPLATE_MOD_ID}]: `);
+    const raw = line.trim().toLowerCase() || TEMPLATE_MOD_ID;
+    if (MOD_ID_RE.test(raw)) return raw;
+    console.error(
+      'Неверный mod id. Допустимы только строчные латинские буквы, цифры и _; длина 2–64. Дефис нельзя (например test_mod вместо test-mod).'
+    );
+  }
+}
+
+async function promptPackageInteractive(rl) {
+  while (true) {
+    const line = await question(rl, `Java package (mod_group_id) [${TEMPLATE_GROUP}]: `);
+    const raw = line.trim() || TEMPLATE_GROUP;
+    if (PACKAGE_RE.test(raw)) return raw;
+    console.error(
+      'Неверный пакет. Нужно минимум два сегмента через точку, как com.author.mymod (строчные латинские буквы, цифры, _).'
+    );
+  }
+}
+
+async function promptDisplayNameInteractive(rl) {
+  while (true) {
+    const line = await question(rl, 'Display name [Example Mod]: ');
+    const raw = line.trim() || 'Example Mod';
+    if (raw.length > 0) return raw;
+    console.error('Имя для отображения не может быть пустым.');
+  }
+}
+
+async function promptClassNameInteractive(rl, defaultName) {
+  while (true) {
+    const line = await question(rl, `Main class name [${defaultName}]: `);
+    const val = line.trim() || defaultName;
+    if (CLASS_RE.test(val)) return val;
+    console.error(
+      'Неверное имя класса. Нужен идентификатор Java с заглавной буквы, например ModMain или MyCoolMod (не "test").'
+    );
+  }
+}
+
+async function promptDescriptionInteractive(rl, def) {
+  while (true) {
+    const line = await question(rl, `Short description (one line) [${def}]: `);
+    const raw = line.trim() || def;
+    if (!/[\r\n]/.test(raw)) return raw;
+    console.error('Описание должно быть одной строкой.');
+  }
+}
+
 async function promptAll(rl, partial) {
   const p = { ...partial };
-  if (!p.modId) {
-    p.modId = (await question(rl, `Mod id [${TEMPLATE_MOD_ID}]: `)).trim() || TEMPLATE_MOD_ID;
+  if (!p.modId) p.modId = await promptModIdInteractive(rl);
+  if (!p.group) p.group = await promptPackageInteractive(rl);
+  if (!p.name) p.name = await promptDisplayNameInteractive(rl);
+  if (!p.classNameFromCli) {
+    p.className = await promptClassNameInteractive(rl, p.className || 'ModMain');
   }
-  if (!p.group) {
-    p.group = (await question(rl, `Java package (mod_group_id) [${TEMPLATE_GROUP}]: `)).trim() || TEMPLATE_GROUP;
-  }
-  if (!p.name) {
-    p.name = (await question(rl, `Display name [Example Mod]: `)).trim() || 'Example Mod';
-  }
-  const cn = (await question(rl, `Main class name [ModMain]: `)).trim();
-  if (cn) p.className = cn;
-  if (!p.description) {
-    p.description =
-      (await question(rl, 'Short description (one line) [My NeoForge mod]: ')).trim() || 'My NeoForge mod';
+  if (p.description === undefined || p.description === '') {
+    p.description = await promptDescriptionInteractive(rl, 'My NeoForge mod');
   }
   return p;
 }
@@ -271,11 +318,22 @@ async function main() {
 
   if (!opts.yes && !opts.dryRun && process.stdin.isTTY) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const ans = await new Promise((resolve) =>
-      rl.question(`Apply: mod_id=${opts.modId}, package=${opts.group}, class=${opts.className}? [y/N] `, resolve)
-    );
+    let confirmAbort = false;
+    while (true) {
+      const ans = await question(
+        rl,
+        `Apply: mod_id=${opts.modId}, package=${opts.group}, class=${opts.className}? [Y/n] `
+      );
+      const t = ans.trim().toLowerCase();
+      if (t === '' || t === 'y' || t === 'yes') break;
+      if (t === 'n' || t === 'no') {
+        confirmAbort = true;
+        break;
+      }
+      console.error('Введите y или n (пустой ввод = да).');
+    }
     rl.close();
-    if (!/^y(es)?$/i.test(ans.trim())) {
+    if (confirmAbort) {
       console.log('Aborted.');
       process.exit(0);
     }
